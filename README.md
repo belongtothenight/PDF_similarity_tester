@@ -12,4 +12,4 @@ This repo aims for developing a automic batch PDF similarity tester.
 
 ## EXE Command
 
-```pyinstaller --noconfirm --onefile --console --hidden-import "" "./main.py"```
+```pyinstaller --noconfirm --onefile --console "" "./main.py"```
