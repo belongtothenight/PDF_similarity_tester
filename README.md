@@ -9,3 +9,7 @@ This repo aims for developing a automic batch PDF similarity tester.
 3. [How to extract images from PDF in Python?](https://www.geeksforgeeks.org/how-to-extract-images-from-pdf-in-python/)
 4. [PyPDF2 Documentation](https://pypdf2.readthedocs.io/en/3.0.0/index.html)
 5. [Calculating Text Similarity in Python with NLP](https://www.youtube.com/watch?v=y-EjAuWdZdI)
+
+## EXE Command
+
+```pyinstaller --noconfirm --onefile --console --hidden-import "" "./main.py"```

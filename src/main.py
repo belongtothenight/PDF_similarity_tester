@@ -18,14 +18,23 @@ logging.basicConfig(level=logging.INFO)
 
 class PDFST_Error:
     def __init__(self) -> None:
-        pass
+        self.ERROR_str = "ERROR: "
+        self.END_str = " ERROR"
 
-    def folder_invalid(folderpath:str) -> None:
-        print("Folderpath is invalid: {}".format(folderpath))
+    def folder_invalid(self, folderpath:str) -> None:
+        print("{}Folderpath is invalid: {}.{}".format(self.ERROR_str, folderpath, self.END_str))
         sys.exit(0)
 
-    def file_read_error(filepath:str) -> None:
-        print("File read error: {}".format(filepath))
+    def file_read_error(self, filepath:str) -> None:
+        print("{}File read error: {}.{}".format(self.ERROR_str, filepath, self.END_str))
+        sys.exit(0)
+
+    def invalid_argument(self, args:list) -> None:
+        print("{}Invalid arguments: {}.{}".format(self.ERROR_str, args, self.END_str))
+        sys.exit(0)
+
+    def argument_not_enough(self) -> None:
+        print("{}Not enough arguments.{}".format(self.ERROR_str, self.END_str))
         sys.exit(0)
 
 class PDFSimilarityTester:
@@ -34,15 +43,20 @@ class PDFSimilarityTester:
                  export_detail_directory:str, 
                  export_similarity_directory:str, 
                  weight=[0.9, 0, 0.1, 0], # [text_similarity, img_similarity, text_hash_similarity, img_hash_similarity]
-                 nlpm_name="en_core_web_md",
                  nlpm_weight=[0.45, 0.45, 0.1, 0]) -> None:
         #* Initialize class
         self.folderpath = folderpath
         self.weight = weight
         self.export_detail_directory = export_detail_directory
         self.export_similarity_directory = export_similarity_directory
-        self.nlpm_name = nlpm_name # Natural Language Processing Model Name
         self.nlpm_weight = nlpm_weight
+        #* Model Chosen
+        # self.nlpm_size = "sm" # Natural Language Processing Model Size (small)
+        self.nlpm_size = "md" # Natural Language Processing Model Size (medium)
+        # self.nlpm_size = "lg" # Natural Language Processing Model Size (large)
+        # self.nlpm_size = "trf" # Natural Language Processing Model Size (transformer)
+        self.nlpm_en_name = "en_core_web_{}".format(self.nlpm_size) # Natural Language Processing Model Name
+        self.nlpm_zh_name = "zh_core_web_{}".format(self.nlpm_size) # Natural Language Processing Model Name
         #* Check if folderpath is valid
         if not os.path.isdir(folderpath):
             PDFST_Error.folder_invalid(folderpath)
@@ -90,14 +104,19 @@ class PDFSimilarityTester:
 
     def _load_PATH(self) -> None:
         #* Load PATH of PDF files in folderpath
-        for root, dirs, files in os.walk(self.folderpath):
-            for file in files:
-                if file.endswith(".pdf"):
-                    self.PATH_list.append(os.path.join(root, file))
+        self.__walk_dir(self.folderpath)
         self.PDF_detail_dataframe["filename"] = self.PATH_list
         logging.debug("PATH_list: {}".format(self.PATH_list))
         logging.debug("PATH_list length: {}".format(len(self.PATH_list)))
         print("Loaded {} PDF files".format(len(self.PATH_list)))
+
+    def __walk_dir(self, dirpath:str) -> None:
+        for root, dirs, files in os.walk(dirpath):
+            for file in files:
+                if file.endswith(".pdf"):
+                    self.PATH_list.append(os.path.join(root, file))
+            for dir in dirs:
+                self.__walk_dir(dir)
 
     def _text_extractor(self) -> None:
         #* Extract text from PDF files
@@ -134,10 +153,10 @@ class PDFSimilarityTester:
         logging.debug("text_zh_list.shape: {}".format(len(self.text_zh_list)))
         print("Splitted text from {} PDF files".format(len(self.text_en_list)))
 
-    def __text_similarity(self, idx1:int, idx2:int, text_list:list) -> float:
+    def __text_similarity(self, idx1:int, idx2:int, text_list:list, nlpm_object) -> float:
         #* Compare text
-        s1 = self.nlpm(text_list[idx1])
-        s2 = self.nlpm(text_list[idx2])
+        s1 = nlpm_object(text_list[idx1])
+        s2 = nlpm_object(text_list[idx2])
         return s1.similarity(s2)
 
     def __text_hash_similarity(self, idx1:int, idx2:int, text_hash_list) -> float:
@@ -165,18 +184,22 @@ class PDFSimilarityTester:
         print("Exported detail to PDF_detail.csv")
 
     def _generate_result(self) -> None:
+        #* Load NLP model
+        print("Loading en model...", end="\r")
+        self.nlpm_en = spacy.load(self.nlpm_en_name)
+        print("Loading en model... Done")
+        print("Loading zh model...", end="\r")
+        self.nlpm_zh = spacy.load(self.nlpm_zh_name)
+        print("Loading zh model... Done")
         #* Generate result
-        print("Loading model...", end="\r")
-        self.nlpm = spacy.load(self.nlpm_name)
-        print("Loading model... Done")
         idx_list = range(len(self.PATH_list))
         for obj_idx1, obj_idx2 in itertools.combinations(idx_list, 2):
             self.filename1_list.append(obj_idx1)
             self.filename2_list.append(obj_idx2)
-            self.text_en_similarity_list.append(self.__text_similarity(obj_idx1, obj_idx2, self.text_en_list))
-            self.text_zh_similarity_list.append(self.__text_similarity(obj_idx1, obj_idx2, self.text_zh_list))
-            self.text_num_similarity_list.append(self.__text_similarity(obj_idx1, obj_idx2, self.text_num_list))
-            self.text_other_similarity_list.append(self.__text_similarity(obj_idx1, obj_idx2, self.text_other_list))
+            self.text_en_similarity_list.append(self.__text_similarity(obj_idx1, obj_idx2, self.text_en_list, self.nlpm_en))
+            self.text_zh_similarity_list.append(self.__text_similarity(obj_idx1, obj_idx2, self.text_zh_list, self.nlpm_zh))
+            self.text_num_similarity_list.append(self.__text_similarity(obj_idx1, obj_idx2, self.text_num_list, self.nlpm_en))
+            self.text_other_similarity_list.append(self.__text_similarity(obj_idx1, obj_idx2, self.text_other_list, self.nlpm_en))
             self.text_mix_similarity_list.append(np.dot(self.nlpm_weight, [self.text_en_similarity_list[-1], self.text_zh_similarity_list[-1], self.text_num_similarity_list[-1], self.text_other_similarity_list[-1]]))
             self.img_similarity_list.append(self.__img_similarity(obj_idx1, obj_idx2))
             self.text_hash_similarity_list.append(self.__text_hash_similarity(obj_idx1, obj_idx2, self.text_hash_list))
@@ -199,9 +222,71 @@ class PDFSimilarityTester:
         self.PDF_similarity_dataframe.to_csv(path, index=False)
         print("Exported result to PDF_similarity.csv")
 
+def validate_dir(dirpath:str) -> bool:
+    #* Check if dirpath is valid
+    if not os.path.isdir(dirpath):
+        PDFST_Error.folder_invalid(dirpath)
+    else:
+        pass
 
+def execute():
+    """
+    PDF Similarity Tester
+    Usage: python main.py <input_dir> <export_detail_dir> <export_result_dir> [--weight=<weight>] [--nlpmweight=<w1>,<w2>,<w3>,<w4>] [-h/--help]
+    !!!For URL links: ONLY ACCEPT YOUTUBE LINKS!!!
+    Weight calculation: (text_mix * weight) + (tex_hash * (1-weight))
+    NLPM Weight calculation: (en_similarity * w1) + (zh_similarity * w2) + (num_similarity * w3) + (other_similarity * w4)
+    sys.argv[1] path of input folder (contains PDF files even inside subfolder)
+    sys.argv[2] path of export detail folder
+    sys.argv[3] path of export result folder
+    sys.argv[?] (--weight) weight of videohash method (default: 0.9)
+    sys.argv[?] (--nlpmweight) weight of NLPM method (default: 0.45, 0.45, 0.1, 0)
+    sys.argv[?] (-h/--help) help (show available options)
+    """
+    #* Check arguments
+    available_short_options = "h:"
+    available_long_options = ["weight=", "nlpmweight=", "help"]
+    try:
+        opts, args = getopt.getopt(sys.argv[4:], available_short_options, available_long_options)
+    except getopt.GetoptError:
+        logging.critical("Invalid arguments.")
+        PDFST_Error().invalid_argument(sys.argv[4:])
+    #* Check for help
+    if len(sys.argv) < 4:
+        if '-h' in sys.argv or '--help' in sys.argv:
+            print(execute.__doc__)
+            sys.exit()
+        else:
+            logging.critical("Not enough arguments.")
+            PDFST_Error().argument_not_enough()
+    #* Initialize variable with default value
+    weight = [0.9, 0, 0.1, 0]
+    nlpm_weight = [0.47, 0.47, 0.06, 0]
+    #* Parse arguments
+    input_dir = sys.argv[1]
+    export_detail_dir = sys.argv[2]
+    export_result_path = sys.argv[3]
+    #* Parse arguments
+    for opt, arg in opts:
+        if opt in ("--weight"):
+            weight[0] = float(arg)
+            weight[2] = 1 - weight[0]
+        elif opt in ("--nlpmweight"):
+            nlpm_weight = [float(num) for num in arg.split(",")]
+    #* Validate input
+    validate_dir(input_dir)
+    validate_dir(export_detail_dir)
+    validate_dir(export_result_path)
+    #* Execute
+    PDFSimilarityTester(folderpath=input_dir, 
+                        export_detail_directory=export_detail_dir, 
+                        export_similarity_directory=export_result_path, 
+                        weight=weight, 
+                        nlpm_weight=nlpm_weight)
+    
 
         
 if __name__ == "__main__":
-    folderpath = "../similarity_test"
-    PDFSimilarityTester(folderpath, folderpath, folderpath)
+    # folderpath = "../similarity_test"
+    # PDFSimilarityTester(folderpath, folderpath, folderpath)
+    execute()
