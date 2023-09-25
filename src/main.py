@@ -1,6 +1,4 @@
 from PyPDF2 import PdfReader
-from nltk.tokenize import word_tokenize, sent_tokenize
-import gensim
 import pandas as pd
 import numpy as np
 import logging
@@ -9,6 +7,8 @@ import itertools
 import sys
 import getopt
 import hashlib
+import spacy
+import re
 
 # logging.basicConfig(level=logging.DEBUG)
 logging.basicConfig(level=logging.INFO)
@@ -29,39 +29,62 @@ class PDFST_Error:
         sys.exit(0)
 
 class PDFSimilarityTester:
-    def __init__(self, folderpath:str, export_detail_directory:str, export_similarity_directory:str, weight=[0.45, 0.45, 0.05, 0.05]) -> None:
+    def __init__(self, 
+                 folderpath:str, 
+                 export_detail_directory:str, 
+                 export_similarity_directory:str, 
+                 weight=[0.9, 0, 0.1, 0], # [text_similarity, img_similarity, text_hash_similarity, img_hash_similarity]
+                 nlpm_name="en_core_web_md",
+                 nlpm_weight=[0.45, 0.45, 0.1, 0]) -> None:
         #* Initialize class
         self.folderpath = folderpath
         self.weight = weight
         self.export_detail_directory = export_detail_directory
         self.export_similarity_directory = export_similarity_directory
+        self.nlpm_name = nlpm_name # Natural Language Processing Model Name
+        self.nlpm_weight = nlpm_weight
         #* Check if folderpath is valid
         if not os.path.isdir(folderpath):
             PDFST_Error.folder_invalid(folderpath)
         #* Create variable
         self.PDF_detail_dataframe = pd.DataFrame(columns=["filename", "text_hash", "img_hash"])
-        self.PDF_similarity_dataframe = pd.DataFrame(columns=["filename1", "filename2", "text_similarity", "img_similarity", "text_hash_similarity", "img_hash_similarity", "mix_similarity"])
-        self.PATH_list = np.empty(0, dtype=str)
+        self.PDF_similarity_dataframe = pd.DataFrame(columns=["filename1", 
+                                                              "filename2", 
+                                                              "text_en_similarity", 
+                                                              "text_zh_similarity", 
+                                                              "text_num_similarity", 
+                                                              "text_other_similarity", 
+                                                              "text_mix_similarity", 
+                                                            #   "img_similarity", 
+                                                              "text_hash_similarity", 
+                                                            #   "img_hash_similarity", 
+                                                              "mix_similarity"])
+        self.PATH_list = []
         self.reader_list = []
-        self.text_list = np.empty(0, dtype=str)
+        self.text_list = []
         self.hasher_list = []
-        self.text_hash_list = np.empty(0, dtype=str)
-        self.tokens = []
-        self.dictionary = None
+        self.text_hash_list = []
+        self.text_en_list = []
+        self.text_zh_list = []
+        self.text_num_list = []
+        self.text_other_list = []
 
-        self.filename1_list = np.empty(0, dtype=str)
-        self.filename2_list = np.empty(0, dtype=str)
-        self.text_similarity_list = np.empty(0, dtype=float)
-        self.img_similarity_list = np.empty(0, dtype=float)
-        self.text_hash_similarity_list = np.empty(0, dtype=float)
-        self.img_hash_similarity_list = np.empty(0, dtype=float)
-        self.mix_similarity_list = np.empty(0, dtype=float)
+        self.filename1_list = []
+        self.filename2_list = []
+        self.text_en_similarity_list = []
+        self.text_zh_similarity_list = []
+        self.text_num_similarity_list = []
+        self.text_other_similarity_list = []
+        self.text_mix_similarity_list = []
+        self.img_similarity_list = []
+        self.text_hash_similarity_list = []
+        self.img_hash_similarity_list = []
+        self.mix_similarity_list = []
         #* Main Flow
         self._load_PATH()
         self._text_extractor()
-        self._img_extractor()
-        self._text_hasher()
-        self._img_hasher()
+        self._text_hasher(self.text_list, self.text_hash_list)
+        self._text_language_splitter()
         self._export_detail()
         self._generate_result()
 
@@ -70,11 +93,11 @@ class PDFSimilarityTester:
         for root, dirs, files in os.walk(self.folderpath):
             for file in files:
                 if file.endswith(".pdf"):
-                    self.PATH_list = np.append(self.PATH_list, os.path.join(root, file))
+                    self.PATH_list.append(os.path.join(root, file))
         self.PDF_detail_dataframe["filename"] = self.PATH_list
         logging.debug("PATH_list: {}".format(self.PATH_list))
-        logging.debug("PATH_list.shape: {}".format(self.PATH_list.shape))
-        print("Loaded {} PDF files".format(self.PATH_list.shape[0]))
+        logging.debug("PATH_list length: {}".format(len(self.PATH_list)))
+        print("Loaded {} PDF files".format(len(self.PATH_list)))
 
     def _text_extractor(self) -> None:
         #* Extract text from PDF files
@@ -85,47 +108,53 @@ class PDFSimilarityTester:
             except:
                 PDFST_Error.file_read_error(path)
         logging.debug("reader_list: {}".format(self.reader_list))
-        logging.debug("reader_list.shape: {}".format(len(self.reader_list)))
+        logging.debug("reader_list length: {}".format(len(self.reader_list)))
         for reader in self.reader_list:
             tmpString = ""
             for page in reader.pages:
                 tmpString += page.extract_text()
-            self.text_list = np.append(self.text_list, tmpString)
+            self.text_list.append(tmpString)
         logging.debug("text_list: {}".format(self.text_list))
-        logging.debug("text_list.shape: {}".format(self.text_list.shape))
-        print("Extracted text from {} PDF files".format(self.text_list.shape[0]))
+        print("Extracted text from {} PDF files".format(len(self.text_list)))
 
-    def _img_extractor(self) -> None:
-        #* Extract images from PDF files
-        pass
-
-    def _text_hasher(self) -> None:
+    def _text_hasher(self, text_list:list, hash_list:list) -> None:
         #* Hash text
+        for text in text_list:
+            hash_list.append(hashlib.sha256(text.encode()).hexdigest())
+        self.PDF_detail_dataframe["text_hash"] = hash_list
+        print("Hashed text from {} PDF files".format(len(hash_list)))
+
+    def _text_language_splitter(self) -> None:
         for text in self.text_list:
-            self.text_hash_list = np.append(self.text_hash_list, hashlib.sha256(text.encode()).hexdigest())
-        self.PDF_detail_dataframe["text_hash"] = self.text_hash_list
-        logging.debug("text_hash_list: {}".format(self.text_hash_list))
-        logging.debug("text_hash_list.shape: {}".format(len(self.text_hash_list)))
-        print("Hashed text from {} PDF files".format(len(self.text_hash_list)))
+            self.text_en_list.append(' '.join(re.findall(r"[a-zA-Z]+", text)))
+            self.text_zh_list.append(' '.join(re.findall(r"[\u4e00-\u9fa5]+", text)))
+            self.text_num_list.append(' '.join(re.findall(r"[0-9]+", text)))
+            self.text_other_list.append(' '.join(re.findall(r"[^a-zA-Z\u4e00-\u9fa5]+", text)))
+        logging.debug("text_en_list.shape: {}".format(len(self.text_en_list)))
+        logging.debug("text_zh_list.shape: {}".format(len(self.text_zh_list)))
+        print("Splitted text from {} PDF files".format(len(self.text_en_list)))
 
-    def _img_hasher(self) -> None:
-        #* Hash images
-        pass
-
-    def __text_similarity(self, idx1:int, idx2:int) -> float:
+    def __text_similarity(self, idx1:int, idx2:int, text_list:list) -> float:
         #* Compare text
-        return 0
+        s1 = self.nlpm(text_list[idx1])
+        s2 = self.nlpm(text_list[idx2])
+        return s1.similarity(s2)
 
-    def __text_hash_similarity(self, idx1:int, idx2:int) -> float:
+    def __text_hash_similarity(self, idx1:int, idx2:int, text_hash_list) -> float:
         #* Compare text hash
-        return 0
+        diffcnt = 0
+        hash_len = len(text_hash_list[idx1])
+        for i in range(hash_len):
+            if text_hash_list[idx1][i] != text_hash_list[idx2][i]:
+                diffcnt += 1
+        return (hash_len - diffcnt) / hash_len
 
     def __img_similarity(self, idx1:int, idx2:int) -> float:
-        #* Compare images
+        #* Compare image
         return 0
-
+    
     def __img_hash_similarity(self, idx1:int, idx2:int) -> float:
-        #* Compare images hash
+        #* Compare image hash
         return 0
 
     def _export_detail(self) -> None:
@@ -137,24 +166,34 @@ class PDFSimilarityTester:
 
     def _generate_result(self) -> None:
         #* Generate result
-        for i, j in itertools.combinations(self.PATH_list, 2):
-            obj_idx1 = self.PATH_list.tolist().index(i)
-            obj_idx2 = self.PATH_list.tolist().index(j)
-            self.filename1_list = np.append(self.filename1_list, i)
-            self.filename2_list = np.append(self.filename2_list, j)
-            self.text_similarity_list = np.append(self.text_similarity_list, self.__text_similarity(obj_idx1, obj_idx2))
-            self.img_similarity_list = np.append(self.img_similarity_list, self.__img_similarity(obj_idx1, obj_idx2))
-            self.text_hash_similarity_list = np.append(self.text_hash_similarity_list, self.__text_hash_similarity(obj_idx1, obj_idx2))
-            self.img_hash_similarity_list = np.append(self.img_hash_similarity_list, self.__img_hash_similarity(obj_idx1, obj_idx2))
-            self.mix_similarity_list = np.append(self.mix_similarity_list, self.weight[0]*self.text_similarity_list[-1] + self.weight[1]*self.img_similarity_list[-1] + self.weight[2]*self.text_hash_similarity_list[-1] + self.weight[3]*self.img_hash_similarity_list[-1])
+        print("Loading model...", end="\r")
+        self.nlpm = spacy.load(self.nlpm_name)
+        print("Loading model... Done")
+        idx_list = range(len(self.PATH_list))
+        for obj_idx1, obj_idx2 in itertools.combinations(idx_list, 2):
+            self.filename1_list.append(obj_idx1)
+            self.filename2_list.append(obj_idx2)
+            self.text_en_similarity_list.append(self.__text_similarity(obj_idx1, obj_idx2, self.text_en_list))
+            self.text_zh_similarity_list.append(self.__text_similarity(obj_idx1, obj_idx2, self.text_zh_list))
+            self.text_num_similarity_list.append(self.__text_similarity(obj_idx1, obj_idx2, self.text_num_list))
+            self.text_other_similarity_list.append(self.__text_similarity(obj_idx1, obj_idx2, self.text_other_list))
+            self.text_mix_similarity_list.append(np.dot(self.nlpm_weight, [self.text_en_similarity_list[-1], self.text_zh_similarity_list[-1], self.text_num_similarity_list[-1], self.text_other_similarity_list[-1]]))
+            self.img_similarity_list.append(self.__img_similarity(obj_idx1, obj_idx2))
+            self.text_hash_similarity_list.append(self.__text_hash_similarity(obj_idx1, obj_idx2, self.text_hash_list))
+            self.img_hash_similarity_list.append(self.__img_hash_similarity(obj_idx1, obj_idx2))
+            self.mix_similarity_list.append(np.dot(self.weight, [self.text_mix_similarity_list[-1], self.img_similarity_list[-1], self.text_hash_similarity_list[-1], self.img_hash_similarity_list[-1]]))
         self.PDF_similarity_dataframe["filename1"] = self.filename1_list
         self.PDF_similarity_dataframe["filename2"] = self.filename2_list
-        self.PDF_similarity_dataframe["text_similarity"] = self.text_similarity_list
-        self.PDF_similarity_dataframe["img_similarity"] = self.img_similarity_list
+        self.PDF_similarity_dataframe["text_en_similarity"] = self.text_en_similarity_list
+        self.PDF_similarity_dataframe["text_zh_similarity"] = self.text_zh_similarity_list
+        self.PDF_similarity_dataframe["text_num_similarity"] = self.text_num_similarity_list
+        self.PDF_similarity_dataframe["text_other_similarity"] = self.text_other_similarity_list
+        self.PDF_similarity_dataframe["text_mix_similarity"] = self.text_mix_similarity_list
+        # self.PDF_similarity_dataframe["img_similarity"] = self.img_similarity_list
         self.PDF_similarity_dataframe["text_hash_similarity"] = self.text_hash_similarity_list
-        self.PDF_similarity_dataframe["img_hash_similarity"] = self.img_hash_similarity_list
+        # self.PDF_similarity_dataframe["img_hash_similarity"] = self.img_hash_similarity_list
         self.PDF_similarity_dataframe["mix_similarity"] = self.mix_similarity_list
-        logging.debug("DataFrame shape: {}".format(self.PDF_similarity_dataframe.shape))
+        logging.debug("DataFrame shape: {}".format(len(self.PDF_similarity_dataframe)))
         path = os.path.join(self.export_similarity_directory, "PDF_similarity.csv")
         path = os.path.abspath(path)
         self.PDF_similarity_dataframe.to_csv(path, index=False)
