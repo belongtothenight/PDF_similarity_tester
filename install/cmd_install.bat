@@ -9,15 +9,6 @@ cd PDF_similarity_tester
 ECHO Updating pip
 python -m pip install --upgrade pip
 
-ECHO Installing virtualenv
-pip install virtualenv -U
-
-ECHO Create virtual environment
-python -m venv env
-
-ECHO Activate virtual environment
-env/bin/activate.bat
-
 ECHO Installing packages
 pip install spacy numpy pandas PyPDF2 -U
 
@@ -27,4 +18,5 @@ python -m spacy download zh_core_web_sm
 
 ECHO Setup complete!!!
 ECHO You can now run "./main.py"
+
 
