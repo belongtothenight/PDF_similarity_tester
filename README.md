@@ -10,6 +10,6 @@ This repo aims for developing a automic batch PDF similarity tester.
 4. [PyPDF2 Documentation](https://pypdf2.readthedocs.io/en/3.0.0/index.html)
 5. [Calculating Text Similarity in Python with NLP](https://www.youtube.com/watch?v=y-EjAuWdZdI)
 
-## EXE Command
+## Release
 
-```pyinstaller --noconfirm --onefile --console "" "./main.py"```
+- Can't pack NLP model used in spaCy inside of EXE, therefore no windows executable is released.

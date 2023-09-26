@@ -10,6 +10,15 @@ import hashlib
 import spacy
 import re
 
+# import en_core_web_sm as nlpm_en
+# import zh_core_web_sm as nlpm_zh
+import en_core_web_md as nlpm_en
+import zh_core_web_md as nlpm_zh
+# import en_core_web_lg as nlpm_en
+# import zh_core_web_lg as nlpm_zh
+# import en_core_web_trf as nlpm_en
+# import zh_core_web_trf as nlpm_zh
+
 # logging.basicConfig(level=logging.DEBUG)
 logging.basicConfig(level=logging.INFO)
 # logging.basicConfig(level=logging.WARNING)
@@ -50,13 +59,6 @@ class PDFSimilarityTester:
         self.export_detail_directory = export_detail_directory
         self.export_similarity_directory = export_similarity_directory
         self.nlpm_weight = nlpm_weight
-        #* Model Chosen
-        # self.nlpm_size = "sm" # Natural Language Processing Model Size (small)
-        self.nlpm_size = "md" # Natural Language Processing Model Size (medium)
-        # self.nlpm_size = "lg" # Natural Language Processing Model Size (large)
-        # self.nlpm_size = "trf" # Natural Language Processing Model Size (transformer)
-        self.nlpm_en_name = "en_core_web_{}".format(self.nlpm_size) # Natural Language Processing Model Name
-        self.nlpm_zh_name = "zh_core_web_{}".format(self.nlpm_size) # Natural Language Processing Model Name
         #* Check if folderpath is valid
         if not os.path.isdir(folderpath):
             PDFST_Error.folder_invalid(folderpath)
@@ -186,10 +188,10 @@ class PDFSimilarityTester:
     def _generate_result(self) -> None:
         #* Load NLP model
         print("Loading en model...", end="\r")
-        self.nlpm_en = spacy.load(self.nlpm_en_name)
+        self.nlpm_en = nlpm_en.load()
         print("Loading en model... Done")
         print("Loading zh model...", end="\r")
-        self.nlpm_zh = spacy.load(self.nlpm_zh_name)
+        self.nlpm_zh = nlpm_zh.load()
         print("Loading zh model... Done")
         #* Generate result
         idx_list = range(len(self.PATH_list))
