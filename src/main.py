@@ -29,7 +29,7 @@ class PDFST_Error:
         print("{}File read error: {}.{}".format(self.ERROR_str, filepath, self.END_str))
         sys.exit(0)
 
-    def invalid_argument(self, args:list) -> None:
+    def invalid_argument(self, args) -> None:
         print("{}Invalid arguments: {}.{}".format(self.ERROR_str, args, self.END_str))
         sys.exit(0)
 
@@ -39,12 +39,16 @@ class PDFST_Error:
 
 class PDFSimilarityTester:
     def __init__(self, 
+                 nlpm_en, 
+                 nlpm_zh,
                  folderpath:str, 
                  export_detail_directory:str, 
                  export_similarity_directory:str, 
                  weight=[0.9, 0, 0.1, 0], # [text_similarity, img_similarity, text_hash_similarity, img_hash_similarity]
                  nlpm_weight=[0.45, 0.45, 0.1, 0]) -> None:
         #* Initialize class
+        self.nlpm_en = nlpm_en
+        self.nlpm_zh = nlpm_zh
         self.folderpath = folderpath
         self.weight = weight
         self.export_detail_directory = export_detail_directory
@@ -75,7 +79,6 @@ class PDFSimilarityTester:
         self.text_zh_list = []
         self.text_num_list = []
         self.text_other_list = []
-
         self.filename1_list = []
         self.filename2_list = []
         self.text_en_similarity_list = []
@@ -177,13 +180,6 @@ class PDFSimilarityTester:
         print("Exported detail to PDF_detail.csv")
 
     def _generate_result(self) -> None:
-        #* Load NLP model
-        print("Loading en model...", end="\r")
-        self.nlpm_en = nlpm_en.load()
-        print("Loading en model... Done")
-        print("Loading zh model...", end="\r")
-        self.nlpm_zh = nlpm_zh.load()
-        print("Loading zh model... Done")
         #* Generate result
         idx_list = range(len(self.PATH_list))
         for obj_idx1, obj_idx2 in itertools.combinations(idx_list, 2):
@@ -272,7 +268,8 @@ def execute():
     validate_dir(export_result_path)
     #* Read config.txt
     with open("config.txt", "r") as f:
-        config = f.readlines()
+        config = str(f.readlines()[0])
+        config = re.findall(r"[a-zA-Z]+", config)[0]
     if config == "sm":
         import en_core_web_sm as nlpm_en
         import zh_core_web_sm as nlpm_zh
@@ -287,9 +284,18 @@ def execute():
         import zh_core_web_trf as nlpm_zh
     else:
         logging.critical("Invalid config.txt")
-        PDFST_Error.invalid_argument('config.txt')
+        PDFST_Error().invalid_argument('config.txt')
+    #* Load NLP model
+    print("Loading en model...", end="\r")
+    nlpm_en = nlpm_en.load()
+    print("Loading en model... Done")
+    print("Loading zh model...", end="\r")
+    nlpm_zh = nlpm_zh.load()
+    print("Loading zh model... Done")
     #* Execute
-    PDFSimilarityTester(folderpath=input_dir, 
+    PDFSimilarityTester(nlpm_en=nlpm_en,
+                        nlpm_zh=nlpm_zh,
+                        folderpath=input_dir, 
                         export_detail_directory=export_detail_dir, 
                         export_similarity_directory=export_result_path, 
                         weight=weight, 
