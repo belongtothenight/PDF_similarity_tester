@@ -12,8 +12,8 @@ ECHO PDFST::Installing packages
 CALL pip install spacy numpy pandas PyPDF2 -U
 
 ECHO PDFST::Installing spacy models
-CALL python -m spacy download en_core_web_sm
-CALL python -m spacy download zh_core_web_sm
+CALL python -m spacy download en_core_web_trf
+CALL python -m spacy download zh_core_web_trf
 
 ECHO PDFST::Create config.txt file
 CALL "trf">.\PDF_similarity_tester\config.txt
