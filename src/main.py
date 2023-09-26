@@ -10,15 +10,6 @@ import hashlib
 import spacy
 import re
 
-# import en_core_web_sm as nlpm_en
-# import zh_core_web_sm as nlpm_zh
-import en_core_web_md as nlpm_en
-import zh_core_web_md as nlpm_zh
-# import en_core_web_lg as nlpm_en
-# import zh_core_web_lg as nlpm_zh
-# import en_core_web_trf as nlpm_en
-# import zh_core_web_trf as nlpm_zh
-
 # logging.basicConfig(level=logging.DEBUG)
 logging.basicConfig(level=logging.INFO)
 # logging.basicConfig(level=logging.WARNING)
@@ -279,6 +270,24 @@ def execute():
     validate_dir(input_dir)
     validate_dir(export_detail_dir)
     validate_dir(export_result_path)
+    #* Read config.txt
+    with open("config.txt", "r") as f:
+        config = f.readlines()
+    if config == "sm":
+        import en_core_web_sm as nlpm_en
+        import zh_core_web_sm as nlpm_zh
+    elif config == "md":
+        import en_core_web_md as nlpm_en
+        import zh_core_web_md as nlpm_zh
+    elif config == "lg":
+        import en_core_web_lg as nlpm_en
+        import zh_core_web_lg as nlpm_zh
+    elif config == "trf":
+        import en_core_web_trf as nlpm_en
+        import zh_core_web_trf as nlpm_zh
+    else:
+        logging.critical("Invalid config.txt")
+        PDFST_Error.invalid_argument('config.txt')
     #* Execute
     PDFSimilarityTester(folderpath=input_dir, 
                         export_detail_directory=export_detail_dir, 
