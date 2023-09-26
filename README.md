@@ -9,8 +9,8 @@ This repo aims for developing a automic batch PDF similarity tester.
 3. Download one of the following batch files.
    1. [cmd_install_sm.bat](https://github.com/belongtothenight/PDF_similarity_tester/blob/main/install/cmd_install_sm.bat) for small model.
    2. [cmd_install_md.bat](https://github.com/belongtothenight/PDF_similarity_tester/blob/main/install/cmd_install_md.bat) for medium model.
-   3. [cmd_install_lg.bat](https://github.com/belongtothenight/PDF_similarity_tester/blob/main/install/cmd_install_lg.bat)
-   4. [cmd_install_trf.bat](https://github.com/belongtothenight/PDF_similarity_tester/blob/main/install/cmd_install_trf.bat)
+   3. [cmd_install_lg.bat](https://github.com/belongtothenight/PDF_similarity_tester/blob/main/install/cmd_install_lg.bat) for large model.
+   4. [cmd_install_trf.bat](https://github.com/belongtothenight/PDF_similarity_tester/blob/main/install/cmd_install_trf.bat) for transformer model.
 4. Execute corresponding python file
 
 ## Reference
